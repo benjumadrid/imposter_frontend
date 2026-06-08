@@ -91,9 +91,7 @@ export default function BuyingHistory() {
               (sum, item) => sum + (parseFloat(item.total_price) || 0),
               0
             );
-            const grandTotal = itemsTotal + taxiFee;
-
-            return (
+            const grandTotal = itemsTotal + taxiFee;return (
               <motion.div
                 key={idx}
                 initial={{ opacity: 0, y: 20 }}
@@ -125,11 +123,14 @@ export default function BuyingHistory() {
                     <tbody>
                       {dateItems.map((item, i) => {
                         const isKg = item.measurement_type === "kg";
+                        const isPiece = item.measurement_type === "piece";
                         const totalPrice = parseFloat(item.total_price) || 0;
                         const taxi = parseFloat(item.taxi_fee) || 0;
                         const totalWithTaxi = totalPrice + taxi;
                         const originalStock = isKg
                           ? `${parseFloat(item.quantity)} kg`
+                          : isPiece
+                          ? `${parseFloat(item.quantity)} pcs`
                           : `${parseFloat(item.quantity) * parseFloat(item.unit_per_pocket)} units`;
 
                         return (
@@ -148,6 +149,10 @@ export default function BuyingHistory() {
                                 <span className="bg-blue-100 text-blue-600 text-xs font-semibold px-2 py-0.5 rounded-full">
                                   ⚖️ kg
                                 </span>
+                              ) : isPiece ? (
+                                <span className="bg-green-100 text-green-600 text-xs font-semibold px-2 py-0.5 rounded-full">
+                                  🧩 piece
+                                </span>
                               ) : (
                                 <span className="bg-purple-100 text-purple-600 text-xs font-semibold px-2 py-0.5 rounded-full">
                                   📦 pocket
@@ -158,15 +163,13 @@ export default function BuyingHistory() {
                               {item.quantity} {isKg ? "kg" : "pcs"}
                             </td>
                             <td className="px-4 py-2 border text-center">
-                              {isKg ? (
+                              {isKg || isPiece ? (
                                 <span className="text-gray-400 text-xs">N/A</span>
                               ) : (
                                 item.unit_per_pocket
                               )}
                             </td>
-                            <td className="px-4 py-2 border text-center">
-                              {originalStock}
-                            </td>
+                            <td className="px-4 py-2 border text-center">{originalStock}</td>
                             <td className="px-4 py-2 border text-center">{item.price} ETB</td>
                             <td className="px-4 py-2 border text-center">{taxi.toFixed(2)} ETB</td>
                             <td className="px-4 py-2 border text-center font-semibold text-blue-600">

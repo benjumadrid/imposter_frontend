@@ -7,8 +7,15 @@ export default function Report() {
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [weekEnd, setWeekEnd] = useState(() => new Date().toISOString().slice(0, 10));
+  const [weekEnd, setWeekEnd] = useState(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const d = String(now.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  });
   const [selectedMonth, setSelectedMonth] = useState(null);
+  const [selectedYear, setSelectedYear] = useState(null);
 
   useEffect(() => {
     const fetchSales = async () => {
@@ -46,11 +53,22 @@ export default function Report() {
     return Array.from(months).sort((a, b) => b.localeCompare(a));
   }, [sales]);
 
+  const yearOptions = useMemo(() => {
+    const years = new Set();
+    sales.forEach((s) => {
+      const d = new Date(s.sales_date || s.sale_date || s.saleDate);
+      if (!isNaN(d.getTime())) years.add(d.getFullYear());
+    });
+    return Array.from(years).sort((a, b) => b - a);
+  }, [sales]);
+
   useEffect(() => {
-    if (!selectedMonth && monthYearOptions.length) {
-      setSelectedMonth(monthYearOptions[0]);
-    }
+    if (!selectedMonth && monthYearOptions.length) setSelectedMonth(monthYearOptions[0]);
   }, [monthYearOptions, selectedMonth]);
+
+  useEffect(() => {
+    if (!selectedYear && yearOptions.length) setSelectedYear(yearOptions[0]);
+  }, [yearOptions, selectedYear]);
 
   const filteredSales = useMemo(() => {
     if (!search) return sales;
@@ -59,66 +77,66 @@ export default function Report() {
     );
   }, [sales, search]);
 
-  const { dailyWindow, weeklyWindow, monthlyWindow } = useMemo(() => {
-    const end = new Date(weekEnd + "T23:59:59");
-    const validEnd = isNaN(end.getTime()) ? new Date() : end;
-
-    const dayStart = new Date(validEnd);
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(dayStart);
-    dayEnd.setDate(dayStart.getDate() + 1);
-
-    const weeklyStart = new Date(dayStart);
-    weeklyStart.setDate(dayStart.getDate() - 6);
-    const weeklyEnd = new Date(dayEnd);
+  const { dailyWindow, weeklyWindow, monthlyWindow, yearlyWindow } = useMemo(() => {
+    const [yyyy, mm, dd] = weekEnd.split("-").map(Number);
+    const dayStart    = new Date(yyyy, mm - 1, dd, 0, 0, 0, 0);
+    const dayEnd      = new Date(yyyy, mm - 1, dd, 23, 59, 59, 999);
+    const weeklyStart = new Date(yyyy, mm - 1, dd - 6, 0, 0, 0, 0);
+    const weeklyEnd   = new Date(dayEnd);
 
     let monthStart, monthEnd;
     if (selectedMonth) {
       const [yStr, mStr] = selectedMonth.split("-");
       const y = parseInt(yStr, 10);
       const m = parseInt(mStr, 10) - 1;
-      monthStart = new Date(y, m, 1);
-      monthEnd = new Date(y, m + 1, 1);
+      monthStart = new Date(y, m, 1, 0, 0, 0, 0);
+      monthEnd   = new Date(y, m + 1, 0, 23, 59, 59, 999);
     } else {
-      const y = validEnd.getFullYear();
-      const m = validEnd.getMonth();
-      monthStart = new Date(y, m, 1);
-      monthEnd = new Date(y, m + 1, 1);
+      monthStart = new Date(yyyy, mm - 1, 1, 0, 0, 0, 0);
+      monthEnd   = new Date(yyyy, mm, 0, 23, 59, 59, 999);
     }
 
+    const yr = selectedYear || yyyy;
+    const yearStart = new Date(yr, 0, 1, 0, 0, 0, 0);
+    const yearEnd   = new Date(yr, 11, 31, 23, 59, 59, 999);
+
     return {
-      dailyWindow: { start: dayStart, end: dayEnd },
-      weeklyWindow: { start: weeklyStart, end: weeklyEnd },
-      monthlyWindow: { start: monthStart, end: monthEnd },
+      dailyWindow:   { start: dayStart,    end: dayEnd    },
+      weeklyWindow:  { start: weeklyStart, end: weeklyEnd },
+      monthlyWindow: { start: monthStart,  end: monthEnd  },
+      yearlyWindow:  { start: yearStart,   end: yearEnd   },
     };
-  }, [weekEnd, selectedMonth]);
+  }, [weekEnd, selectedMonth, selectedYear]);
 
   const totals = useMemo(() => {
-    let daily = 0, weekly = 0, monthly = 0;
+    let daily = 0, weekly = 0, monthly = 0, yearly = 0;
     filteredSales.forEach((s) => {
       const d = new Date(s.sales_date || s.sale_date || s.saleDate);
       if (isNaN(d.getTime())) return;
       const val = saleValue(s);
-      if (d >= dailyWindow.start && d < dailyWindow.end) daily += val;
-      if (d >= weeklyWindow.start && d < weeklyWindow.end) weekly += val;
-      if (d >= monthlyWindow.start && d < monthlyWindow.end) monthly += val;
+      if (d >= dailyWindow.start   && d <= dailyWindow.end)   daily   += val;
+      if (d >= weeklyWindow.start  && d <= weeklyWindow.end)  weekly  += val;
+      if (d >= monthlyWindow.start && d <= monthlyWindow.end) monthly += val;
+      if (d >= yearlyWindow.start  && d <= yearlyWindow.end)  yearly  += val;
     });
-    return { daily, weekly, monthly };
-  }, [filteredSales, dailyWindow, weeklyWindow, monthlyWindow]);
+    return { daily, weekly, monthly, yearly };
+  }, [filteredSales, dailyWindow, weeklyWindow, monthlyWindow, yearlyWindow]);
 
   const grouped = useMemo(() => {
-    return filteredSales.reduce((acc, s) => {
+    const map = filteredSales.reduce((acc, s) => {
       const d = new Date(s.sales_date || s.sale_date || s.saleDate);
-      const key = isNaN(d.getTime()) ? "Unknown" : d.toLocaleDateString();
-      if (!acc[key]) acc[key] = { items: [], total: 0 };
+      const key = isNaN(d.getTime())
+        ? "Unknown"
+        : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      if (!acc[key]) acc[key] = { items: [], total: 0, display: isNaN(d.getTime()) ? "Unknown" : d.toLocaleDateString() };
       acc[key].items.push(s);
       acc[key].total += saleValue(s);
       return acc;
     }, {});
+    return Object.fromEntries(Object.entries(map).sort(([a], [b]) => b.localeCompare(a)));
   }, [filteredSales]);
 
-  const fmt = (n) =>
-    Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
+  const fmt = (n) => Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
 
   const fadeUp = {
     initial: { opacity: 0, y: 26 },
@@ -141,9 +159,9 @@ export default function Report() {
       </motion.h1>
 
       {/* Filters */}
-      <motion.div {...fadeUp} className="grid md:grid-cols-3 gap-6 mb-10">
+      <motion.div {...fadeUp} className="grid md:grid-cols-4 gap-6 mb-10">
         <div>
-          <label className="text-sm text-gray-600">Week End Date</label>
+          <label className="text-sm text-gray-600">Reference Date (Daily / Week End)</label>
           <input
             type="date"
             value={weekEnd}
@@ -160,13 +178,23 @@ export default function Report() {
           >
             <option value="">Auto (current)</option>
             {monthYearOptions.map((m) => {
-              const [y, mm] = m.split("-");
-              const label = new Date(`${y}-${mm}-01`).toLocaleString(undefined, {
-                month: "long",
-                year: "numeric",
-              });
+              const [y, mStr] = m.split("-");
+              const label = new Date(`${y}-${mStr}-01`).toLocaleString(undefined, { month: "long", year: "numeric" });
               return <option key={m} value={m}>{label}</option>;
             })}
+          </select>
+        </div>
+        <div>
+          <label className="text-sm text-gray-600">Select Year</label>
+          <select
+            value={selectedYear || ""}
+            onChange={(e) => setSelectedYear(e.target.value ? parseInt(e.target.value) : null)}
+            className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-pink-400"
+          >
+            <option value="">Auto (current)</option>
+            {yearOptions.map((y) => (
+              <option key={y} value={y}>{y}</option>
+            ))}
           </select>
         </div>
         <div>
@@ -184,19 +212,44 @@ export default function Report() {
       </motion.div>
 
       {/* Totals */}
-      <motion.div {...fadeUp} className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-        <div className="bg-pink-500 text-white p-6 rounded-3xl shadow-lg text-center">
-          <div className="text-sm opacity-90">Daily</div>
-          <div className="text-3xl font-extrabold">{fmt(totals.daily)} ETB</div>
+      <motion.div {...fadeUp} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+
+        {/* Daily */}
+        <div className="bg-white border-l-4 border-pink-500 rounded-2xl shadow-md p-6">
+          <p className="text-sm font-semibold text-pink-500 uppercase tracking-wide mb-1">Daily</p>
+          <p className="text-xs text-gray-400 mb-3">{weekEnd}</p>
+          <p className="text-3xl font-extrabold text-gray-800">{fmt(totals.daily)}</p>
+          <p className="text-sm text-gray-500 mt-1">ETB</p>
         </div>
-        <div className="bg-blue-500 text-white p-6 rounded-3xl shadow-lg text-center">
-          <div className="text-sm opacity-90">Weekly (7 days)</div>
-          <div className="text-3xl font-extrabold">{fmt(totals.weekly)} ETB</div>
+
+        {/* Weekly */}
+        <div className="bg-white border-l-4 border-blue-500 rounded-2xl shadow-md p-6">
+          <p className="text-sm font-semibold text-blue-500 uppercase tracking-wide mb-1">Weekly</p>
+          <p className="text-xs text-gray-400 mb-3">7 days ending {weekEnd}</p>
+          <p className="text-3xl font-extrabold text-gray-800">{fmt(totals.weekly)}</p>
+          <p className="text-sm text-gray-500 mt-1">ETB</p>
         </div>
-        <div className="bg-purple-500 text-white p-6 rounded-3xl shadow-lg text-center">
-          <div className="text-sm opacity-90">Monthly</div>
-          <div className="text-3xl font-extrabold">{fmt(totals.monthly)} ETB</div>
+
+        {/* Monthly */}
+        <div className="bg-white border-l-4 border-purple-500 rounded-2xl shadow-md p-6">
+          <p className="text-sm font-semibold text-purple-500 uppercase tracking-wide mb-1">Monthly</p>
+          <p className="text-xs text-gray-400 mb-3">
+            {selectedMonth
+              ? new Date(`${selectedMonth}-01`).toLocaleString(undefined, { month: "long", year: "numeric" })
+              : "Current month"}
+          </p>
+          <p className="text-3xl font-extrabold text-gray-800">{fmt(totals.monthly)}</p>
+          <p className="text-sm text-gray-500 mt-1">ETB</p>
         </div>
+
+        {/* Yearly */}
+        <div className="bg-white border-l-4 border-green-500 rounded-2xl shadow-md p-6">
+          <p className="text-sm font-semibold text-green-500 uppercase tracking-wide mb-1">Yearly</p>
+          <p className="text-xs text-gray-400 mb-3">{selectedYear || new Date().getFullYear()}</p>
+          <p className="text-3xl font-extrabold text-gray-800">{fmt(totals.yearly)}</p>
+          <p className="text-sm text-gray-500 mt-1">ETB</p>
+        </div>
+
       </motion.div>
 
       {/* Grouped Sales */}
@@ -206,9 +259,9 @@ export default function Report() {
             No sales found.
           </div>
         ) : (
-          Object.entries(grouped).map(([date, grp], idx) => (
+          Object.entries(grouped).map(([dateKey, grp], idx) => (
             <motion.div
-              key={date}
+              key={dateKey}
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: idx * 0.1 }}
@@ -216,13 +269,10 @@ export default function Report() {
             >
               <div className="flex justify-between mb-4">
                 <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                  <FiCalendar className="text-pink-500" /> {date}
+                  <FiCalendar className="text-pink-500" /> {grp.display}
                 </h2>
-                <span className="font-semibold text-pink-600">
-                  Total: {fmt(grp.total)} ETB
-                </span>
+                <span className="font-semibold text-pink-600">Total: {fmt(grp.total)} ETB</span>
               </div>
-
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {grp.items.map((s, j) => {
                   const isFromLoan = (s.notes || "").startsWith("Loan repayment");
@@ -232,20 +282,15 @@ export default function Report() {
                       whileHover={{ scale: 1.04 }}
                       className="border border-gray-200 rounded-2xl p-4 hover:shadow-md transition-all"
                     >
-                      {/* Item name + loan badge */}
                       <div className="flex items-center justify-between mb-2">
-                        <h3 className="font-semibold text-gray-800 capitalize">
-                          {s.item_name}
-                        </h3>
+                        <h3 className="font-semibold text-gray-800 capitalize">{s.item_name}</h3>
                         {isFromLoan && (
-                          <span className="text-xs bg-yellow-100 text-yellow-700 border border-yellow-300 px-2 py-0.5 rounded-full font-semibold whitespace-nowrap">
+                          <span className="text-xs bg-indigo-100 text-indigo-700 border border-indigo-300 px-2 py-0.5 rounded-full font-semibold whitespace-nowrap">
                             📋 From Loan
                           </span>
                         )}
                       </div>
-                      <p className="text-sm text-gray-600">
-                        Qty: {s.quantity_sold ?? s.quantity ?? 0}
-                      </p>
+                      <p className="text-sm text-gray-600">Qty: {s.quantity_sold ?? s.quantity ?? 0}</p>
                       <p className="text-sm font-semibold text-pink-600 mt-1">
                         Sale Value: {fmt(saleValue(s))} ETB
                       </p>

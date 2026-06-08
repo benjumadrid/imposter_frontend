@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
 
 export default function SalesItems() {
@@ -8,7 +8,7 @@ export default function SalesItems() {
     quantity_sold: "",
     selling_price: "",
     notes: "",
-    sale_date: new Date().toISOString().slice(0, 10),
+    sale_date: new Date().toLocaleDateString("en-CA"),
   });
   const [itemInfo, setItemInfo] = useState(null);
   const [fetchingItem, setFetchingItem] = useState(false);
@@ -16,6 +16,7 @@ export default function SalesItems() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
+  const [showConfirm, setShowConfirm] = useState(false);
   const suggestionRef = useRef(null);
 
   useEffect(() => {
@@ -40,20 +41,14 @@ export default function SalesItems() {
       setShowSuggestions(false);
       return;
     }
-
     const delay = setTimeout(async () => {
       setFetchingItem(true);
       try {
-        const res = await axios.get(
-          `http://localhost:3000/api/items/search?name=${fields.item_name}`
-        );
+        const res = await axios.get(`http://localhost:3000/api/items/search?name=${fields.item_name}`);
         const results = res.data || [];
         setSuggestions(results);
         setShowSuggestions(results.length > 0);
-
-        const match = results.find(
-          (i) => i.item_name.toLowerCase() === fields.item_name.toLowerCase()
-        );
+        const match = results.find((i) => i.item_name.toLowerCase() === fields.item_name.toLowerCase());
         setItemInfo(match || null);
       } catch {
         setSuggestions([]);
@@ -63,7 +58,6 @@ export default function SalesItems() {
         setFetchingItem(false);
       }
     }, 300);
-
     return () => clearTimeout(delay);
   }, [fields.item_name]);
 
@@ -76,17 +70,19 @@ export default function SalesItems() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-
-    // ✅ Block quantity more than available stock
     if (name === "quantity_sold" && itemInfo) {
       if (parseFloat(value) > itemInfo.stock_units) return;
     }
-
     setFields((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = async (e) => {
+  const handleFormSubmit = (e) => {
     e.preventDefault();
+    setShowConfirm(true);
+  };
+
+  const handleConfirm = async () => {
+    setShowConfirm(false);
     setLoading(true);
     try {
       await axios.post("http://localhost:3000/api/sales/create", fields);
@@ -96,7 +92,7 @@ export default function SalesItems() {
         quantity_sold: "",
         selling_price: "",
         notes: "",
-        sale_date: new Date().toISOString().slice(0, 10),
+        sale_date: new Date().toLocaleDateString("en-CA"),
       });
       setItemInfo(null);
       setSuggestions([]);
@@ -111,167 +107,188 @@ export default function SalesItems() {
   if (pageLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <div className="text-green-600 font-bold text-2xl animate-pulse">
-          Loading...
-        </div>
+        <div className="text-green-600 font-bold text-2xl animate-pulse">Loading...</div>
       </div>
     );
   }
 
   const isKg = itemInfo?.measurement_type === "kg";
+  const isPiece = itemInfo?.measurement_type === "piece";
+  const getUnitLabel = () => isKg ? "kg" : isPiece ? "pcs" : "units";
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 30 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.6 }}
-    >
-      <div className="max-w-md mx-auto mt-10 p-6 bg-white shadow-lg rounded-xl">
-        <h2 className="text-2xl font-bold mb-6 text-center text-green-600">
-          💵 Record Sale
-        </h2>
+    <>
+      <AnimatePresence>
+        {showConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center"
+            style={{ backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }}
+          >
+            <motion.div
+              initial={{ scale: 0.85, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.85, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4"
+            >
+              <h3 className="text-lg font-bold text-gray-800 mb-4 text-center">
+                💵 Confirm Sale
+              </h3>
+              <div className="space-y-2 text-sm text-gray-600 mb-6 bg-green-50 rounded-xl p-4">
+                <p><span className="font-semibold text-gray-800">Item:</span> {fields.item_name}</p>
+                <p><span className="font-semibold text-gray-800">Type:</span> {itemInfo?.measurement_type}</p>
+                <p><span className="font-semibold text-gray-800">Qty Sold:</span> {fields.quantity_sold} {getUnitLabel()}</p>
+                <p><span className="font-semibold text-gray-800">Selling Price:</span> {fields.selling_price} ETB</p>
+                <p><span className="font-semibold text-gray-800">Date:</span> {fields.sale_date}</p>
+                {fields.notes && <p><span className="font-semibold text-gray-800">Notes:</span> {fields.notes}</p>}
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowConfirm(false)}
+                  className="flex-1 py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirm}
+                  className="flex-1 py-2 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700 transition"
+                >
+                  ✅ Confirm
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6 }}
+      >
+        <div className="max-w-md mx-auto mt-10 p-6 bg-white shadow-lg rounded-xl">
+          <h2 className="text-2xl font-bold mb-6 text-center text-green-600">
+            💵 Record Sale
+          </h2>
 
-          {/* Item Name with suggestions */}
-          <div className="relative" ref={suggestionRef}>
+          <form onSubmit={handleFormSubmit} className="space-y-4">
+            <div className="relative" ref={suggestionRef}>
+              <input
+                type="text"
+                name="item_name"
+                value={fields.item_name}
+                onChange={handleChange}
+                onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                placeholder="Item Name"
+                autoComplete="off"
+                className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-400"
+                required
+              />
+
+              {showSuggestions && (
+                <motion.ul
+                  initial={{ opacity: 0, y: -5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="absolute z-50 w-full bg-white border border-gray-200 rounded-md shadow-lg mt-1 max-h-48 overflow-y-auto"
+                >
+                  {suggestions.map((item) => (
+                    <li
+                      key={item.id}
+                      onMouseDown={() => handleSelectSuggestion(item)}
+                      className="flex items-center justify-between px-3 py-2 hover:bg-green-50 cursor-pointer text-sm border-b border-gray-50 last:border-0"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span>{item.measurement_type === "kg" ? "⚖️" : item.measurement_type === "piece" ? "🧩" : "📦"}</span>
+                        <span className="font-medium text-gray-800">{item.item_name}</span>
+                      </div>
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${item.stock_units === 0 ? "bg-red-100 text-red-500" : "bg-green-100 text-green-600"}`}>
+                        {item.stock_units === 0 ? "Out of stock" : `${item.stock_units} ${item.measurement_type === "kg" ? "kg" : item.measurement_type === "piece" ? "pcs" : "units"}`}
+                      </span>
+                    </li>
+                  ))}
+                </motion.ul>
+              )}
+
+              {fetchingItem && <p className="text-xs text-gray-400 mt-1 px-1">🔍 Searching...</p>}
+              {!fetchingItem && itemInfo && (
+                <div className="mt-1 px-2 py-1.5 bg-green-50 border border-green-200 rounded-md text-xs text-green-700 flex items-center justify-between">
+                  <span>
+                    {isKg ? "⚖️ kg" : isPiece ? "🧩 piece" : "📦 pocket"} —{" "}
+                    <strong>{itemInfo.stock_units} {getUnitLabel()} available</strong>
+                  </span>
+                  {itemInfo.stock_units === 0 && <span className="text-red-500 font-semibold ml-2">Out of stock</span>}
+                </div>
+              )}
+              {!fetchingItem && fields.item_name.trim() && !itemInfo && !showSuggestions && (
+                <p className="text-xs text-red-400 mt-1 px-1">⚠️ Item not found in stock.</p>
+              )}
+            </div>
+
+            <div className="relative">
+              <input
+                type="number"
+                name="quantity_sold"
+                value={fields.quantity_sold}
+                onChange={handleChange}
+                placeholder={isKg ? "Quantity sold (kg)" : isPiece ? "Quantity sold (pcs)" : "Quantity sold (units)"}
+                autoComplete="off"
+                className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-400"
+                step={isKg ? "0.01" : "1"}
+                min="0"
+                max={itemInfo ? itemInfo.stock_units : undefined}
+                required
+              />
+              {itemInfo && fields.quantity_sold && (
+                <p className="text-xs text-gray-400 mt-1 px-1">Max: {itemInfo.stock_units} {getUnitLabel()}</p>
+              )}
+            </div>
+
+            <div className="relative">
+              <input
+                type="number"
+                name="selling_price"
+                value={fields.selling_price}
+                onChange={handleChange}
+                placeholder="Total Selling Price"
+                autoComplete="off"
+                className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-400"
+                min="0"
+                required
+              />
+              <span className="absolute right-3 top-2.5 text-xs text-gray-400">total</span>
+            </div>
+
             <input
               type="text"
-              name="item_name"
-              value={fields.item_name}
+              name="notes"
+              value={fields.notes}
               onChange={handleChange}
-              onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
-              placeholder="Item Name"
+              placeholder="Notes (Optional)"
               autoComplete="off"
               className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-400"
-              required
             />
 
-            {/* Dropdown */}
-            {showSuggestions && (
-              <motion.ul
-                initial={{ opacity: 0, y: -5 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="absolute z-50 w-full bg-white border border-gray-200 rounded-md shadow-lg mt-1 max-h-48 overflow-y-auto"
-              >
-                {suggestions.map((item) => (
-                  <li
-                    key={item.id}
-                    onMouseDown={() => handleSelectSuggestion(item)}
-                    className="flex items-center justify-between px-3 py-2 hover:bg-green-50 cursor-pointer text-sm border-b border-gray-50 last:border-0"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span>{item.measurement_type === "kg" ? "⚖️" : "📦"}</span>
-                      <span className="font-medium text-gray-800">{item.item_name}</span>
-                    </div>
-                    <span
-                      className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                        item.stock_units === 0
-                          ? "bg-red-100 text-red-500"
-                          : "bg-green-100 text-green-600"
-                      }`}
-                    >
-                      {item.stock_units === 0
-                        ? "Out of stock"
-                        : `${item.stock_units} ${item.measurement_type === "kg" ? "kg" : "units"}`}
-                    </span>
-                  </li>
-                ))}
-              </motion.ul>
-            )}
-
-            {/* Status */}
-            {fetchingItem && (
-              <p className="text-xs text-gray-400 mt-1 px-1">🔍 Searching...</p>
-            )}
-            {!fetchingItem && itemInfo && (
-              <div className="mt-1 px-2 py-1.5 bg-green-50 border border-green-200 rounded-md text-xs text-green-700 flex items-center justify-between">
-                <span>
-                  {isKg ? "⚖️ kg item" : "📦 pocket item"} —{" "}
-                  <strong>
-                    {itemInfo.stock_units} {isKg ? "kg" : "units"} available
-                  </strong>
-                </span>
-                {itemInfo.stock_units === 0 && (
-                  <span className="text-red-500 font-semibold ml-2">Out of stock</span>
-                )}
-              </div>
-            )}
-            {!fetchingItem && fields.item_name.trim() && !itemInfo && !showSuggestions && (
-              <p className="text-xs text-red-400 mt-1 px-1">⚠️ Item not found in stock.</p>
-            )}
-          </div>
-
-          {/* Quantity Sold */}
-          <div className="relative">
             <input
-              type="number"
-              name="quantity_sold"
-              value={fields.quantity_sold}
+              type="date"
+              name="sale_date"
+              value={fields.sale_date}
               onChange={handleChange}
-              placeholder={isKg ? "Quantity sold (kg)" : "Quantity sold (units)"}
-              autoComplete="off"
               className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-400"
-              step={isKg ? "0.01" : "1"}
-              min="0"
-              max={itemInfo ? itemInfo.stock_units : undefined}
               required
             />
-            {isKg && (
-              <span className="absolute right-3 top-2.5 text-xs text-gray-400">kg</span>
-            )}
-            {/* ✅ Show max stock hint */}
-            {itemInfo && fields.quantity_sold && (
-              <p className="text-xs text-gray-400 mt-1 px-1">
-                Max: {itemInfo.stock_units} {isKg ? "kg" : "units"}
-              </p>
-            )}
-          </div>
 
-          {/* Selling Price */}
-          <div className="relative">
-            <input
-              type="number"
-              name="selling_price"
-              value={fields.selling_price}
-              onChange={handleChange}
-              placeholder="Total Selling Price"
-              autoComplete="off"
-              className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-400"
-              min="0"
-              required
-            />
-            <span className="absolute right-3 top-2.5 text-xs text-gray-400">total</span>
-          </div>
-
-          <input
-            type="text"
-            name="notes"
-            value={fields.notes}
-            onChange={handleChange}
-            placeholder="Notes (Optional)"
-            autoComplete="off"
-            className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-400"
-          />
-
-          <input
-            type="date"
-            name="sale_date"
-            value={fields.sale_date}
-            onChange={handleChange}
-            className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-400"
-            required
-          />
-
-          <button
-            type="submit"
-            disabled={loading || !itemInfo || itemInfo.stock_units === 0}
-            className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? "Saving..." : "💾 Record Sale"}
-          </button>
-        </form>
-      </div>
-    </motion.div>
+            <button
+              type="submit"
+              disabled={loading || !itemInfo || itemInfo.stock_units === 0}
+              className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? "Saving..." : "💾 Record Sale"}
+            </button>
+          </form>
+        </div>
+      </motion.div>
+    </>
   );
 }
