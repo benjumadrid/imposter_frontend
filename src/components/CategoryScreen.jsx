@@ -9,8 +9,8 @@ import {
 } from "../utils/customCategory";
 import { PREMIUM_CATEGORIES } from "../data/premiumCategoriesData";
 
-const API_URL = "http://localhost:5000/api/categories";
-const PREMIUM_STATUS_URL = "http://localhost:5000/api/premium/status";
+const API_URL = "https://game-backend-x355.onrender.com/api/categories";
+const PREMIUM_STATUS_URL = "https://game-backend-x355.onrender.com/api/premium/status";
 
 const MAX_SELECTED = 3;
 const FONT = "'Segoe UI', Arial, sans-serif";
