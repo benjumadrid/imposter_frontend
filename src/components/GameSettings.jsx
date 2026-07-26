@@ -147,7 +147,7 @@ export default function GameSettings() {
       localStorage.setItem("imposter_device_id", deviceId);
     }
 
-    const res = await fetch("http://localhost:5000/api/premium/redeem", {
+    fetch("https://game-backend-x355.onrender.com/api/premium/status", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, device_id: deviceId }),
