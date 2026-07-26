@@ -8,8 +8,8 @@ import { LS_SHOW_CATEGORY, LS_SHOW_HINT, loadBool } from "../utils/settingsStora
 import { CUSTOM_CATEGORY_ID, loadCustomCategory } from "../utils/customCategory";
 import playerCardImg from "../assets/player-card.png";
 
-const API_BASE = "http://localhost:5000/api";
-const QUESTIONS_API = "http://localhost:5000/api/questions";
+const API_BASE = "https://game-backend-x355.onrender.com/api";
+const QUESTIONS_API = "https://game-backend-x355.onrender.com/api/questions";
 
 // ---- helpers ----
 const getUsedWordIds = () => {
