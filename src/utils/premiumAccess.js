@@ -1,4 +1,4 @@
-const API_URL = "http://localhost:5000/api/premium";
+const API_URL = "https://game-backend-x355.onrender.com/api/premium";
 
 export const LS_PREMIUM_KEY = "imposter_premium_unlocked";
 
