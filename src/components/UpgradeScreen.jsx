@@ -48,7 +48,7 @@ export default function UpgradeScreen() {
 
   const handleRedeem = async () => {
     try {
-      const res = await fetch("http://localhost:5000/api/premium/redeem", {
+    const res = await fetch("https://game-backend-x355.onrender.com/api/premium/redeem", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code, email, device_id: getDeviceId() }),
